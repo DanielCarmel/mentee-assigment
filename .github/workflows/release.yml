@@ -1,0 +1,98 @@
+name: Release
+
+# SemVer git tags drive the whole pipeline. The tag (minus the "v")
+# becomes both the image tag and the app's APP_VERSION, so they always match.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  id-token: write # required for AWS OIDC
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  ACCOUNT_ID: "030454160336"
+  ECR_REPOSITORY: hello-world
+  ECS_CLUSTER: hello-world
+  ECS_SERVICE: hello-world
+  CODEDEPLOY_APP: hello-world
+  CODEDEPLOY_GROUP: hello-world-dg
+  ROLE_ARN: arn:aws:iam::030454160336:role/exam-github-actions
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r app/requirements.txt pytest httpx
+
+      - name: Run tests
+        working-directory: app
+        run: pytest -q
+
+  build-and-deploy:
+    name: Build & Deploy
+    needs: test # a failed test stops the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.version.outputs.version }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Render task definition
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.version.outputs.version }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          envsubst < deploy/task-definition.json > task-definition.rendered.json
+          cat task-definition.rendered.json
+
+      - name: Deploy to ECS (CodeDeploy blue/green)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: task-definition.rendered.json
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          codedeploy-appspec: deploy/appspec.yaml
+          codedeploy-application: ${{ env.CODEDEPLOY_APP }}
+          codedeploy-deployment-group: ${{ env.CODEDEPLOY_GROUP }}

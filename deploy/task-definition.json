@@ -1,0 +1,36 @@
+{
+  "family": "hello-world",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/exam-hello-world-task-execution",
+  "taskRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/exam-hello-world-task",
+  "containerDefinitions": [
+    {
+      "name": "hello-world",
+      "image": "${IMAGE}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "APP_VERSION",
+          "value": "${APP_VERSION}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/hello-world",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
