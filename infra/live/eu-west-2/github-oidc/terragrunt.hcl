@@ -34,4 +34,10 @@ inputs = {
     dependency.ecs.outputs.task_execution_role_arn,
     dependency.ecs.outputs.task_role_arn,
   ]
+
+  # This org appends immutable numeric IDs to the OIDC sub claim.
+  # Pin the exact org/repo IDs (from CloudTrail) for a tight trust scope.
+  subject_claims = [
+    "repo:DanielCarmel@28735997/mentee-assigment@1442875764:*",
+  ]
 }

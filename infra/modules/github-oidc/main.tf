@@ -5,6 +5,16 @@ data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
+# This org appends immutable numeric IDs to the OIDC sub claim
+# (repo:Org@<id>/repo@<id>:...). Fall back to a wildcard pattern that
+# tolerates those IDs when an explicit list isn't provided.
+locals {
+  subject_claims = coalesce(
+    var.subject_claims,
+    ["repo:${var.github_org}*/${var.github_repo}*:*"],
+  )
+}
+
 # Trust policy: only this repo, only via web identity, only the sts audience.
 data "aws_iam_policy_document" "trust" {
   statement {
@@ -25,7 +35,7 @@ data "aws_iam_policy_document" "trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_org}/${var.github_repo}:*"]
+      values   = local.subject_claims
     }
   }
 }

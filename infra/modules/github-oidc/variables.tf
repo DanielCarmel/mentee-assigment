@@ -14,6 +14,17 @@ variable "github_repo" {
   type        = string
 }
 
+variable "subject_claims" {
+  description = <<-EOT
+    OIDC subject (sub) patterns allowed to assume the role. This org includes
+    immutable numeric IDs in the sub claim (e.g. repo:Org@123/repo@456:*), so
+    the standard repo:Org/repo:* pattern does not match. Use a StringLike
+    wildcard pattern that tolerates the appended IDs.
+  EOT
+  type        = list(string)
+  default     = null
+}
+
 variable "permissions_boundary_arn" {
   description = "Permissions boundary required on all exam-* roles."
   type        = string
