@@ -1,14 +1,8 @@
-# Fetch GitHub's OIDC endpoint certificate so we can pin its thumbprint.
-data "tls_certificate" "github" {
-  url = "https://token.actions.githubusercontent.com/.well-known/openid-configuration"
-}
-
-# One OIDC identity provider per account for GitHub Actions.
-resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.github.certificates[0].sha1_fingerprint]
-  tags            = var.tags
+# The GitHub OIDC provider is pre-created in the shared exam account.
+# We reference the existing provider instead of creating one (our user
+# lacks iam:CreateOpenIDConnectProvider).
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
 }
 
 # Trust policy: only this repo, only via web identity, only the sts audience.
@@ -19,7 +13,7 @@ data "aws_iam_policy_document" "trust" {
 
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
     }
 
     condition {
