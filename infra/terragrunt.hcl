@@ -51,16 +51,22 @@ terraform {
 EOF
 }
 
-# Local state — fine for an ephemeral exam account.
-# Production: swap for an S3 backend with DynamoDB locking.
+# Remote state in S3 so it survives ephemeral CloudShell sessions.
+# The bucket is created by the tfstate-backend unit (which uses local state).
+# Native S3 locking (use_lockfile) avoids needing a DynamoDB table for a
+# single operator.
 remote_state {
-  backend = "local"
+  backend = "s3"
   generate = {
     path      = "backend.tf"
     if_exists = "overwrite_terragrunt"
   }
   config = {
-    path = "${get_terragrunt_dir()}/terraform.tfstate"
+    bucket       = "exam-mentee-tfstate-030454160336"
+    key          = "${path_relative_to_include()}/terraform.tfstate"
+    region       = local.aws_region
+    encrypt      = true
+    use_lockfile = true
   }
 }
 
